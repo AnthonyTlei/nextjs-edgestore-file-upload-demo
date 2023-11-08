@@ -1,8 +1,28 @@
 import { initEdgeStore } from "@edgestore/server";
-import { createEdgeStoreNextHandler } from "@edgestore/server/adapters/next/app";
+import {
+  CreateContextOptions,
+  createEdgeStoreNextHandler,
+} from "@edgestore/server/adapters/next/app";
 import { z } from "zod";
 
-const es = initEdgeStore.create();
+type Context = {
+  userId: string;
+  userRole: "admin" | "user";
+};
+
+function createContext({ req }: CreateContextOptions): Context {
+  // TODO: replace hardcoded sessopm with auth provider (clerk)
+  return {
+    userId: "123",
+    userRole: "admin",
+  };
+  // return {
+  //   userId: "1234",
+  //   userRole: "user",
+  // };
+}
+
+const es = initEdgeStore.context<Context>().create();
 
 const edgeStoreRouter = es.router({
   myPublicImages: es
@@ -15,10 +35,24 @@ const edgeStoreRouter = es.router({
       })
     )
     .path(({ input }) => [{ type: input.type }]),
+  myProtectedFiles: es
+    .fileBucket()
+    .path(({ ctx }) => [{ owner: ctx.userId }])
+    .accessControl({
+      OR: [
+        {
+          userId: { path: "owner" },
+        },
+        {
+          userRole: "admin",
+        },
+      ],
+    }),
 });
 
 const handler = createEdgeStoreNextHandler({
   router: edgeStoreRouter,
+  createContext,
 });
 
 export { handler as GET, handler as POST };
